@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+
+<h1>ctf.hacker101.com - "Y2FuIHlvdSByZWNvbj8/"</h1>
+
+<p>
+Upon loading the site, you are presented with a file upload screen:
+</p>
+
+<img src='canyourecon_small.png'>
+
+<p>
+As usual, the first thing I do when starting a CTF is look around the site with ffuf.
+</p>
+
+<h2>Command:</h2>
+
+<p>
+ffuf -w common.txt -u https://host/FUZZ
+</p>
+
+<h2>Output:</h2>
+
+.htpasswd               [Status: 403, Size: 277, Words: 20, Lines: 10, Duration: 107ms]<br>
+.htaccess               [Status: 403, Size: 277, Words: 20, Lines: 10, Duration: 109ms]<br>
+.hta                    [Status: 403, Size: 277, Words: 20, Lines: 10, Duration: 113ms]<br>
+admin                   [Status: 403, Size: 277, Words: 20, Lines: 10, Duration: 126ms]<br>
+server-status           [Status: 403, Size: 277, Words: 20, Lines: 10, Duration: 99ms]<br>
+
+<br>
+<p>
+So everything but the index page is forbidden... I try fuzzing the the directory "Y2FuIHlvdSByZWNvbj8/", which is base64 for "can you recon??" since it's the name of the challenge but I found nothing.  
+</p>
+
+<p>
+At this point I begin trying to upload files. First I upload a basic php webshell but php files are not accepted.  I then tried uploading a php webshell encoded into the IDAT chunks (<a href="https://www.idontplaydarts.com/2012/06/encoding-web-shells-in-png-idat-chunks/">Encoding Web Shells in PNG IDAT chunks</a>), and while I was able to upload the file I didn't know where the file was.
+</p>
+
+<p>
+Based on the name of the challenge, I figured recon would be important, so I fuzzed with bigger wordlists, but this didn't help.  Then I tried making the name "../file" and upon checking the main directory I found my uploaded files.
+</p>
+
+<p>
+I spend some time trying various ways to upload a php webshell, but can't figure it out at first, so I look at the hints on hacker101.
+</p>
+
+<p>
+"How can you abuse the site to disable or rewrite the Apache rule?"
+</p>
+
+<p>
+This gets me thinking about .htaccess files.  What if I can upload "../.htaccess" and replace the current one.  I try it with this piece of code (<a href="https://medium.com/@insecurity_92477/utilizing-htaccess-for-exploitation-purposes-part-1-5733dd7fc8eb">Utilizing .htaccess for exploitation purposes</a>)
+</p>
+
+<br>
+&#x3c;&#x46;&#x69;&#x6c;&#x65;&#x73;&#x20;&#x7e;&#x20;&#x22;&#x5e;&#x5c;&#x2e;&#x68;&#x74;&#x22;&#x5c;&#x3e;<br>
+# overriding deny rule<br>
+# making htaccess accessible from the internet<br>
+Require all granted<br>
+Order allow,deny<br>
+Allow from all<br>
+&#x3c;&#x2f;&#x66;&#x69;&#x6c;&#x65;&#x73;&#x3e;
+<br>
+
+<p>
+I later find out this did indeed overwrite the .htaccess file, but I didn't actually spend a lot of time researching this and getting the file right as I came upon a quicker solution, and I didn't know at the time that it worked because everything was still forbidden.
+</p>
+<p>
+Then after some more reading on file upload vulnerabilities and some sleep,  I tried some different tricks for uploading php files (.PHP, .php2, etc) and found that .phtml executed php.
+</p>
+
+<p>
+So I upload a php webshell with the name "../shell.phtml" and run "shell_exec("ls -a")" for the following output:
+</p>
+
+<br>
+.<br>
+..<br>
+.htaccess<br>
+admin<br>
+admin-settings.js<br>
+shell.php%00.png<br>
+shell.php.png<br>
+index.php<br>
+shell.phtml<br>
+
+<br>
+<p>
+If I cat .htaccess, I see that I did indeed modify the file, so this is probably the intended way to solve the challenge.  I looked around a bit and found that index.php includes Flag.php from the parent directory.  Now I "ls .. -a" to view the parent directory, and flags.txt has all three flags.
+</p>
+
+</body>
+</html>
